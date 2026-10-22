@@ -94,6 +94,44 @@ def ensure_client_vault(slug: str) -> str:
     os.makedirs(screenshots_dir, exist_ok=True)
     return vault_dir
 
+def register_client_vault(slug: str, meta: Optional[Dict[str, Any]] = None) -> None:
+    """Registers or updates a client vault in clients/index.json for fast multi-field lookup."""
+    os.makedirs(CLIENTS_DIR, exist_ok=True)
+    idx = load_index()
+    vault_dir = os.path.join(CLIENTS_DIR, slug)
+    if not os.path.isdir(vault_dir):
+        return
+
+    if not meta:
+        cfg_path = os.path.join(vault_dir, "config.json")
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except Exception:
+                meta = {}
+        else:
+            meta = {}
+
+    website = meta.get("website", "")
+    domain = re.sub(r"^https?://(www\.)?", "", website).rstrip("/") if website else ""
+
+    idx[slug.lower()] = {
+        "slug": slug,
+        "company_name": meta.get("company_name", slug.replace("_", " ").title()),
+        "client_name": meta.get("client_name", ""),
+        "email": meta.get("email", meta.get("client_email", "")),
+        "domain": domain,
+        "folder": f"clients/{slug}",
+        "website": website
+    }
+
+    try:
+        with open(INDEX_PATH, "w", encoding="utf-8") as f:
+            json.dump(idx, f, indent=2)
+    except Exception as e:
+        print(f"[Vault Manager] Warning: could not update index.json: {e}")
+
 def get_client_paths(slug_or_query: str) -> Dict[str, str]:
     """Returns absolute paths to all standard assets for a client, prioritizing client-branded filenames."""
     vault = resolve_client_vault(slug_or_query)

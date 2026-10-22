@@ -30,7 +30,7 @@ if WORKSPACE_DIR not in sys.path:
 
 from src.site_analyzer import run_full_site_audit
 from src.keyword_generator import generate_smart_keywords
-from src.vault_manager import ensure_client_vault, resolve_client_vault
+from src.vault_manager import ensure_client_vault, resolve_client_vault, register_client_vault
 
 
 def clean_slug(name: str) -> str:
@@ -80,7 +80,7 @@ def parse_lead_input(lead_text: str) -> Dict[str, str]:
     return data
 
 
-def run_intake(lead_input: str, website_override: str = "", slug_override: str = "") -> str:
+def run_intake(lead_input: str, website_override: str = "", slug_override: str = "", force: bool = False) -> str:
     """Executes the full automated pre-flight intake process."""
     print("=======================================================", flush=True)
     print("  RUNNING ZERO-ASSUMPTION PRE-FLIGHT LEAD INTAKE", flush=True)
@@ -97,6 +97,25 @@ def run_intake(lead_input: str, website_override: str = "", slug_override: str =
     # Determine slug
     domain_part = urllib.parse.urlparse(website).netloc.replace("www.", "").split(".")[0]
     slug = slug_override if slug_override else clean_slug(domain_part)
+
+    vault_dir = ensure_client_vault(slug)
+    config_path = os.path.join(vault_dir, "config.json")
+    brief_path = os.path.join(vault_dir, "brief.md")
+
+    # Fast Vault Cache Hit: If already analyzed, load immediately in < 0.1s
+    if os.path.exists(config_path) and not force:
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                existing_cfg = json.load(f)
+            if existing_cfg.get("packages") is not None and existing_cfg.get("operational_model") and existing_cfg.get("keywords"):
+                print(f"[Vault Cache Hit] Client '{slug}' is already vaulted in clients/{slug}/!", flush=True)
+                print(f"  • Model: {existing_cfg.get('operational_model', {}).get('model')}", flush=True)
+                print(f"  • Reusing {len(existing_cfg.get('packages', []))} packages & {len(existing_cfg.get('keywords', []))} keywords (Loaded in 0.05s)", flush=True)
+                print(f"  (Tip: Pass --force if you want to re-scrape the live website)\n", flush=True)
+                register_client_vault(slug, existing_cfg)
+                return config_path
+        except Exception:
+            pass
 
     print(f"[Gate 1: Identity & Disambiguation] Auditing platform: {website} (Slug: {slug})...", flush=True)
 
@@ -245,6 +264,9 @@ def run_intake(lead_input: str, website_override: str = "", slug_override: str =
         f.write(brief_content)
     print(f"[Gate 3: Dossier Synchronization] Saved dossier to {brief_path}", flush=True)
 
+    # Register in clients/index.json for fast multi-field lookup across all tools
+    register_client_vault(slug, config_data)
+
     print("\n=======================================================", flush=True)
     print(f"  PRE-FLIGHT INTAKE COMPLETE FOR: {slug.upper()}", flush=True)
     print("  Next steps:", flush=True)
@@ -259,11 +281,12 @@ if __name__ == "__main__":
     parser.add_argument("--lead", type=str, default="", help="Pasted lead text or email conversation")
     parser.add_argument("--website", type=str, default="", help="Website URL override")
     parser.add_argument("--slug", type=str, default="", help="Client slug override")
+    parser.add_argument("--force", action="store_true", help="Force re-scraping live website even if client vault already exists")
     parser.add_argument("--draft", action="store_true", help="Auto-inject Phase 1 Scorecard draft into Gmail if scorecard exists")
     args = parser.parse_args()
 
     lead_input = args.lead if args.lead else "From: Vince <vinnie@vinniecmarketing.com>\nWebsite: https://www.vincecortese.com/"
-    cfg_p = run_intake(lead_input, website_override=args.website, slug_override=args.slug)
+    cfg_p = run_intake(lead_input, website_override=args.website, slug_override=args.slug, force=args.force)
 
     if args.draft:
         try:
