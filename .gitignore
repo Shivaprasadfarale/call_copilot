@@ -1,0 +1,47 @@
+# Sensitive API Keys, Secrets & Credentials (STRICT)
+config.yaml
+token.json
+credentials.json
+data/client_secret_*.json
+
+# Personal / Local Email & Tracking State
+data/email_sent_history.json
+data/tracker_state.json
+data/pms_cache.json
+data/suppression_list.json
+
+# Private Client Vaults, Lead Extracts & Screenshots
+clients/
+knowledge_base/leads/
+knowledge_base/batch_followups_*.md
+leads.md
+etc/
+screenshots/
+archive/
+scratch/
+*_backup*.py
+copilot/call_logs/
+copilot/audio/
+copilot/transcripts/
+.semrush_browser_profile/
+
+# Python Virtual Environments & Caches
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Large Generated Test PDFs
+*.pdf
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.swp

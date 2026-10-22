@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Call Copilot // Personal Lead Tracker & Calling Cockpit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Mission Control Header -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <div class="logo-badge">
+          <span class="pulse-dot"></span>
+          <span class="logo-title">CALL COPILOT</span>
+          <span class="version-tag">POWER DIALER</span>
+        </div>
+        <div class="nav-subtitle">Zero-Friction Calling Cockpit &amp; Daily Lead Tracker</div>
+      </div>
+
+      <!-- Timezone Clocks Ticker -->
+      <div class="timezone-bar" id="timezoneClocks">
+        <div class="tz-card" id="tz-est" data-tz="EST" title="Eastern Time (NY/Miami) • Click to filter EST leads">
+          <div class="tz-header">
+            <span class="tz-badge">EST</span>
+            <span class="tz-status-indicator safe"><span class="tz-dot"></span><span class="tz-label">OPEN</span></span>
+          </div>
+          <div class="tz-time-row">
+            <span class="tz-time-val">--:--</span>
+            <span class="tz-ampm">--</span>
+          </div>
+        </div>
+
+        <div class="tz-card" id="tz-cst" data-tz="CST" title="Central Time (Chicago/Dallas) • Click to filter CST leads">
+          <div class="tz-header">
+            <span class="tz-badge">CST</span>
+            <span class="tz-status-indicator safe"><span class="tz-dot"></span><span class="tz-label">OPEN</span></span>
+          </div>
+          <div class="tz-time-row">
+            <span class="tz-time-val">--:--</span>
+            <span class="tz-ampm">--</span>
+          </div>
+        </div>
+
+        <div class="tz-card" id="tz-mst" data-tz="MST" title="Mountain Time (Denver/Phoenix) • Click to filter MST leads">
+          <div class="tz-header">
+            <span class="tz-badge">MST</span>
+            <span class="tz-status-indicator safe"><span class="tz-dot"></span><span class="tz-label">OPEN</span></span>
+          </div>
+          <div class="tz-time-row">
+            <span class="tz-time-val">--:--</span>
+            <span class="tz-ampm">--</span>
+          </div>
+        </div>
+
+        <div class="tz-card" id="tz-pst" data-tz="PST" title="Pacific Time (LA/Seattle) • Click to filter PST leads">
+          <div class="tz-header">
+            <span class="tz-badge">PST</span>
+            <span class="tz-status-indicator safe"><span class="tz-dot"></span><span class="tz-label">OPEN</span></span>
+          </div>
+          <div class="tz-time-row">
+            <span class="tz-time-val">--:--</span>
+            <span class="tz-ampm">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <button class="btn-primary" id="btnSyncGmail" title="Fetch latest sent emails directly from Gmail">⚡ Sync Emails</button>
+        <button class="btn-secondary" id="btnAddLead" title="Add a new lead to Cockpit">+ Add Lead</button>
+        <button class="btn-secondary" id="btnDailyReport" title="View End of Day Calling Summary">📊 Daily Report</button>
+        <button class="btn-secondary" id="btnRefresh" title="Refresh leads &amp; live clocks">↻ Refresh</button>
+        <button class="btn-ghost" id="btnResetDay" title="Reset Today's dials for new calling day">Reset Day</button>
+      </div>
+    </header>
+
+
+    <!-- Daily Progress Metric Cards -->
+    <section class="metrics-grid">
+      <div class="metric-card primary-card">
+        <div class="metric-label">DAILY DIAL PROGRESS</div>
+        <div class="metric-value-row">
+          <span class="metric-huge" id="statDialsToday">0</span>
+          <span class="metric-target">/ <span id="statDailyGoal">25</span> Dials</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="statProgressBar" style="width: 0%"></div>
+        </div>
+        <div class="metric-sub" id="statDialsRemaining">25 dials to hit daily goal</div>
+      </div>
+
+      <div class="metric-card success-card">
+        <div class="metric-label">MEETINGS BOOKED</div>
+        <div class="metric-huge text-success" id="statMeetingsBooked">0</div>
+        <div class="metric-sub">10-Min Screen Share Zooms</div>
+      </div>
+
+      <div class="metric-card purple-card">
+        <div class="metric-label">CALLBACKS SCHEDULED</div>
+        <div class="metric-huge text-purple" id="statCallbacksScheduled">0</div>
+        <div class="metric-sub">Agreed Follow-ups Set</div>
+      </div>
+
+      <div class="metric-card warning-card">
+        <div class="metric-label">SAFE CALLING NOW</div>
+        <div class="metric-huge text-warning" id="statSafeToCall">0</div>
+        <div class="metric-sub">Leads in 9am - 5pm business hours</div>
+      </div>
+    </section>
+
+    <!-- Controls Bar: Search, Filters, Tabs -->
+    <section class="controls-bar">
+      <!-- Filter Tabs -->
+      <div class="filter-tabs">
+        <button class="tab-btn active" data-tab="tocall">
+          🔥 Needs Call Today <span class="tab-count" id="countToCall">0</span>
+        </button>
+        <button class="tab-btn" data-tab="called">
+          ✅ Called Today <span class="tab-count" id="countCalled">0</span>
+        </button>
+        <button class="tab-btn" data-tab="callbacks">
+          📅 Callbacks <span class="tab-count" id="countCallbacks">0</span>
+        </button>
+        <button class="tab-btn" data-tab="meetings">
+          🎯 Booked Meetings <span class="tab-count" id="countMeetings">0</span>
+        </button>
+        <button class="tab-btn" data-tab="all">
+          📁 All Leads <span class="tab-count" id="countAll">0</span>
+        </button>
+      </div>
+
+      <!-- Search & Zone Filters -->
+      <div class="filters-right">
+        <div class="search-box">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="searchInput" placeholder="Press '/' to search (name, business, city, phone, colleague)..." />
+          <button id="clearSearch" class="clear-btn" style="display:none;">✕</button>
+        </div>
+
+        <select id="tzFilter" class="select-filter">
+          <option value="ALL">All Timezones</option>
+          <option value="EST">Eastern (EST)</option>
+          <option value="CST">Central (CST)</option>
+          <option value="MST">Mountain (MST)</option>
+          <option value="PST">Pacific (PST)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Main Leads Table -->
+    <main class="table-container">
+      <table class="leads-table" id="leadsTable">
+        <thead>
+          <tr>
+            <th class="col-status">Status</th>
+            <th class="col-lead">Prospect &amp; Business</th>
+            <th class="col-phone">Phone (1-Click)</th>
+            <th class="col-clock">Local Time</th>
+            <th class="col-colleague">Outreach Origin (Email &amp; Persona)</th>
+            <th class="col-seo">Key SEO Hook</th>
+            <th class="col-action">Action</th>
+          </tr>
+        </thead>
+        <tbody id="leadsTableBody">
+          <!-- Populated dynamically by app.js -->
+        </tbody>
+      </table>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">🎯</div>
+        <div class="empty-title">No leads found in this view</div>
+        <div class="empty-desc">Try clearing your search query or switching tabs.</div>
+      </div>
+    </main>
+
+    <!-- Power Dialer Shortcut Bar (Docked at Bottom) -->
+    <footer class="shortcuts-dock">
+      <div class="dock-left">
+        <span class="dock-badge">⚡ KEYBOARD POWER DIALER:</span>
+        <span class="key-pill"><kbd>J</kbd> / <kbd>↓</kbd> Next</span>
+        <span class="key-pill"><kbd>K</kbd> / <kbd>↑</kbd> Prev</span>
+        <span class="key-pill"><kbd>Space</kbd> Expand</span>
+        <span class="key-pill"><kbd>C</kbd> Phone</span>
+        <span class="key-pill"><kbd>E</kbd> Email</span>
+        <span class="key-pill"><kbd>W</kbd> Web</span>
+        <span class="key-pill"><kbd>1</kbd> 🎯 Booked</span>
+        <span class="key-pill"><kbd>2</kbd> 🗣️ Callback</span>
+        <span class="key-pill"><kbd>3</kbd> 📼 Voicemail</span>
+        <span class="key-pill"><kbd>4</kbd> ❌ No Answer</span>
+        <span class="key-pill"><kbd>/</kbd> Search</span>
+      </div>
+      <div class="dock-right">
+        <span id="activeSelectionHint">Select any lead to dial</span>
+      </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Image Modal for Scorecards -->
+    <div id="imageModal" class="modal" style="display:none;">
+      <div class="modal-backdrop" onclick="closeImageModal()"></div>
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeImageModal()">✕</button>
+        <img id="modalImage" src="" alt="Semrush Scorecard">
+      </div>
+    </div>
+
+    <!-- Daily Report Modal -->
+    <div id="reportModal" class="modal" style="display:none;">
+      <div class="modal-backdrop" onclick="closeReportModal()"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">📊 End-of-Day Calling Report</div>
+          <button class="modal-close-btn" onclick="closeReportModal()">✕</button>
+        </div>
+        <div class="modal-body" id="reportBody">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" onclick="copyReportText()">📋 Copy Report to Clipboard</button>
+          <button class="btn-secondary" onclick="closeReportModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Add Lead Modal -->
+    <div id="addLeadModal" class="modal" style="display:none;">
+      <div class="modal-backdrop" onclick="closeAddLeadModal()"></div>
+      <div class="modal-card" style="max-width: 560px;">
+        <div class="modal-header">
+          <div class="modal-title">➕ Add New Lead to Cockpit</div>
+          <button class="modal-close-btn" onclick="closeAddLeadModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <form id="addLeadForm" onsubmit="submitNewLead(event)" style="display:flex; flex-direction:column; gap:12px;">
+            <div>
+              <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Company / Business Name *</label>
+              <input type="text" id="nl_company" required placeholder="e.g. Acme Roofing LLC" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Contact / Owner Name</label>
+                <input type="text" id="nl_name" placeholder="e.g. John Doe" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+              </div>
+              <div>
+                <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Phone Number</label>
+                <input type="text" id="nl_phone" placeholder="e.g. (555) 123-4567" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Email Address</label>
+                <input type="email" id="nl_email" placeholder="e.g. john@acmeroofing.com" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+              </div>
+              <div>
+                <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Website URL</label>
+                <input type="text" id="nl_website" placeholder="e.g. acmeroofing.com" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">City / State (Timezone)</label>
+                <input type="text" id="nl_location" placeholder="e.g. Miami, FL (EST)" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+              </div>
+              <div>
+                <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Outreach Colleague</label>
+                <input type="text" id="nl_colleague" placeholder="e.g. Arvind, Abhishek, Amit" style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px;" />
+              </div>
+            </div>
+            <div>
+              <label style="font-size:0.75rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px;">Initial Reply / Context Notes</label>
+              <textarea id="nl_notes" rows="2" placeholder="e.g. Replied 'yes send report' on Oct 7..." style="width:100%; background:#090d16; border:1px solid #334155; color:#fff; padding:8px 12px; border-radius:6px; font-family:inherit;"></textarea>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+              <button type="button" class="btn-secondary" onclick="closeAddLeadModal()">Cancel</button>
+              <button type="submit" class="btn-primary" id="btnSubmitNewLead">Add Lead to Queue</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
