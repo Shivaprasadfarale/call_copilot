@@ -128,46 +128,6 @@ def process_followup(email: str, slug: str = None):
     print(f"\n📍 Target: {first_name} at {company} ({target_email})")
     print(f"🔍 Searching Gmail for existing conversation thread...")
 
-    try:
-        thread_info = find_thread_by_email(target_email)
-    except Exception as e:
-        print(f"❌ Failed to query Gmail threads: {e}")
-        print("\nNote: If you see insufficient permissions, re-authentication with gmail.modify is required.")
-        return
-
-    if not thread_info or not thread_info.get("thread_id"):
-        print(f"⚠️  No existing Gmail thread found for recipient: {target_email}")
-        print("Please check if you sent the previous email to this exact address from this account.")
-        return
-
-    thread_id = thread_info["thread_id"]
-    subject = thread_info["subject"]
-    last_msg_id = thread_info["last_message_id"]
-
-    print(f"✅ Found Existing Thread ID: {thread_id}")
-    print(f"   Subject: {subject}")
-    print(f"   Last Message ID: {last_msg_id}")
-
-    # Inspect previous sent messages to extract the EXACT established greeting name
-    from src.gmail_helper import get_gmail_service, extract_message_html, extract_greeting_name
-    try:
-        service = get_gmail_service()
-        tdata = service.users().threads().get(userId='me', id=thread_id, format='full').execute()
-        msgs = tdata.get('messages', [])
-        for m in reversed(msgs):
-            headers = {h['name'].lower(): h['value'] for h in m.get('payload', {}).get('headers', [])}
-            m_from = headers.get('from', '')
-            if any(k in m_from.lower() for k in ['shiv', 'innovatemarketers']) and 'DRAFT' not in m.get('labelIds', []):
-                sent_body = extract_message_html(m.get('payload', {}))
-                t_name = extract_greeting_name(sent_body)
-                if t_name:
-                    print(f"   🎯 Thread Established Greeting: 'Hi {t_name},' (Inheriting 1:1)")
-                    lead["first_name"] = t_name
-                    lead["client_name"] = t_name
-                    break
-    except Exception as e:
-        print(f"   ⚠️ Could not inspect thread greeting: {e}")
-
     # Clean company name: Never write raw domain URLs like www . domain . com as company names
     comp = lead.get("company_name", "")
     if any(x in comp.lower() for x in [".com", ".net", ".org", "www."]):
@@ -176,40 +136,93 @@ def process_followup(email: str, slug: str = None):
         clean_comp = clean_comp.split('.')[0].replace('-', ' ').replace('_', ' ').title()
         lead["company_name"] = clean_comp
 
-    # Check if thread already had a 22-page visual report or PDF attached
+    thread_info = None
+    thread_id = None
+    last_msg_id = None
+    subject = "Re: Google is changing. Are you ready?"
     is_post_report = False
+
     try:
-        for m in msgs:
-            sent_body = extract_message_html(m.get('payload', {}))
-            if any(k in sent_body.lower() for k in ["22-page", "visual report", "visual search audit", ".pdf", "attached report"]):
-                is_post_report = True
-                print("   📎 Detected prior visual search audit delivery in thread (Using Post-Report meeting follow-up mode)")
-                break
-    except Exception:
-        pass
+        thread_info = find_thread_by_email(target_email)
+    except Exception as e:
+        print(f"⚠️  Gmail search skipped: {e}")
+
+    if thread_info and thread_info.get("thread_id"):
+        thread_id = thread_info["thread_id"]
+        subject = thread_info.get("subject", subject)
+        last_msg_id = thread_info.get("last_message_id")
+        print(f"✅ Found Existing Thread ID: {thread_id} ({subject})")
+
+        # Inspect previous sent messages to extract established greeting name
+        from src.gmail_helper import get_gmail_service, extract_message_html, extract_greeting_name
+        try:
+            service = get_gmail_service()
+            tdata = service.users().threads().get(userId='me', id=thread_id, format='full').execute()
+            msgs = tdata.get('messages', [])
+            for m in reversed(msgs):
+                headers = {h['name'].lower(): h['value'] for h in m.get('payload', {}).get('headers', [])}
+                m_from = headers.get('from', '')
+                if any(k in m_from.lower() for k in ['shiv', 'innovatemarketers']) and 'DRAFT' not in m.get('labelIds', []):
+                    sent_body = extract_message_html(m.get('payload', {}))
+                    t_name = extract_greeting_name(sent_body)
+                    if t_name:
+                        print(f"   🎯 Thread Established Greeting: 'Hi {t_name},' (Inheriting 1:1)")
+                        lead["first_name"] = t_name
+                        lead["client_name"] = t_name
+                        break
+            for m in msgs:
+                sent_body = extract_message_html(m.get('payload', {}))
+                if any(k in sent_body.lower() for k in ["22-page", "visual report", "visual search audit", ".pdf", "attached report"]):
+                    is_post_report = True
+                    print("   📎 Detected prior visual search audit delivery in thread")
+                    break
+        except Exception as e:
+            print(f"   ⚠️ Could not inspect thread greeting: {e}")
+    else:
+        print(f"ℹ️  No existing Gmail thread found for {target_email}. Generating standard in-thread bump copy.")
 
     print(f"\n✍️  Synthesizing personalized in-thread follow-up draft (Post-Report: {is_post_report})...")
     followup_html = generate_followup_body(lead, is_post_report=is_post_report)
+    clean_followup = re.sub(r'<[^>]+>', '', followup_html).strip()
 
-    print(f"📨 Injecting draft directly into thread {thread_id}...")
-    try:
-        draft = create_in_thread_draft(
-            to_email=target_email,
-            subject=subject,
-            html_body=followup_html,
-            thread_id=thread_id,
-            last_message_id=last_msg_id
-        )
-        print("\n" + "=" * 80)
-        print("✨ SUCCESS! DRAFT INJECTED DIRECTLY INTO THREAD!")
-        print(f"   Draft ID: {draft['id']}")
-        print(f"   Thread ID: {thread_id}")
-        print(f"   Recipient: {target_email}")
-        print(f"   Status: Un-sent draft placed inside existing conversation thread.")
-        print("   👉 Open web Gmail -> Open the thread -> Review draft -> Click SEND.")
-        print("=" * 80 + "\n")
-    except Exception as e:
-        print(f"❌ Failed to create in-thread draft: {e}")
+    # Save to vault if possible
+    if slug:
+        from src.vault_manager import resolve_client_vault
+        vpath = resolve_client_vault(slug)
+        if vpath:
+            with open(os.path.join(vpath, "followup_draft.txt"), "w", encoding="utf-8") as ff:
+                ff.write(clean_followup)
+
+    if thread_id:
+        print(f"📨 Injecting draft directly into thread {thread_id}...")
+        try:
+            draft = create_in_thread_draft(
+                to_email=target_email,
+                subject=subject,
+                html_body=followup_html,
+                thread_id=thread_id,
+                last_message_id=last_msg_id
+            )
+            print("\n" + "=" * 80)
+            print("✨ SUCCESS! DRAFT INJECTED DIRECTLY INTO THREAD!")
+            print(f"   Draft ID: {draft['id']}")
+            print(f"   Thread ID: {thread_id}")
+            print(f"   Recipient: {target_email}")
+            print(f"   Status: Un-sent draft placed inside existing conversation thread.")
+            print("   👉 Open web Gmail -> Open the thread -> Review draft -> Click SEND.")
+            print("=" * 80 + "\n")
+            return draft
+        except Exception as e:
+            print(f"⚠️ Could not inject into Gmail API: {e}")
+
+    # Fallback output
+    print("\n" + "=" * 80)
+    print("✨ 48-HOUR IN-THREAD FOLLOW-UP COPY READY TO SEND:")
+    print(f"   Recipient: {target_email}")
+    print(f"   Subject:   {subject}")
+    print("-" * 80)
+    print(clean_followup)
+    print("=" * 80 + "\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create in-thread 48-hour follow-up draft in Gmail.")

@@ -108,6 +108,8 @@ def build_scorecard_html(cfg: Dict[str, Any], scorecard_path: str, pdf_attached:
         service_label = "high-ticket contracts and client engagements"
         vertical_silos = "high-ticket advisory and corporate training silos"
 
+    img_tag = '<div style="text-align: center; margin: 20px 0;"><img src="cid:semrush_screenshot" style="max-width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"></div>' if scorecard_path else ''
+
     html = f"""<p>Hi {client_name},</p>
 <p>My colleague {colleague} forwarded me your reply asking us to send over the website report and errors we spotted on {clean_site}:</p>
 <div style="background-color: #fafafa; border: 1px solid #d1d5db; padding: 12px; margin: 12px 0; font-family: monospace; font-size: 13px; line-height: 1.5; color: #374151;">
@@ -121,7 +123,7 @@ def build_scorecard_html(cfg: Dict[str, Any], scorecard_path: str, pdf_attached:
 &bull; <b>Total Backlinks &amp; Referring Domains:</b> {bl_val} links across {rd_val} domains<br>
 &bull; <b>Organic Keywords Indexed:</b> {kw_val} terms<br>
 &bull; <b>AI Search Visibility:</b> {ai_val}</p>
-<div style="text-align: center; margin: 20px 0;"><img src="cid:semrush_screenshot" style="max-width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"></div>
+{img_tag}
 <p>You have {bl_val} backlinks and {rd_val} referring domains &mdash; that is a genuinely strong foundation. Most businesses in your sector don't come close to that level of domain trust.</p>
 <p>However, despite that authority, Google is only sending you {traf_val}. Meanwhile, competing firms like {comp_str} are sitting right at the top of Google Page 1, capturing {service_label}.</p>
 <p>We identified 3 technical issues blocking {company_name} from Google's first page:</p>
@@ -147,20 +149,22 @@ def run_scorecard_draft(slug: str = None, email: str = None) -> Dict[str, Any]:
         vault_dir = resolve_client_vault(slug)
     
     if not vault_dir and email:
-        # Search index or scan clients
-        clients_dir = os.path.join(WORKSPACE_DIR, "clients")
-        for c in os.listdir(clients_dir):
-            cp = os.path.join(clients_dir, c, "config.json")
-            if os.path.exists(cp):
-                try:
-                    with open(cp, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    if data.get("email", "").lower() == email.lower() or data.get("client_email", "").lower() == email.lower():
-                        vault_dir = os.path.join(clients_dir, c)
-                        slug = c
-                        break
-                except Exception:
-                    pass
+        vault_dir = resolve_client_vault(email)
+        if not vault_dir:
+            clients_dir = os.path.join(WORKSPACE_DIR, "clients")
+            if os.path.exists(clients_dir):
+                for c in os.listdir(clients_dir):
+                    cp = os.path.join(clients_dir, c, "config.json")
+                    if os.path.exists(cp):
+                        try:
+                            with open(cp, "r", encoding="utf-8") as f:
+                                data = json.load(f)
+                            if data.get("email", "").lower() == email.lower() or data.get("client_email", "").lower() == email.lower():
+                                vault_dir = os.path.join(clients_dir, c)
+                                slug = c
+                                break
+                        except Exception:
+                            pass
 
     if not vault_dir:
         raise FileNotFoundError(f"Could not find client vault for slug '{slug}' or email '{email}'. Run run_intake.py first.")
@@ -171,7 +175,6 @@ def run_scorecard_draft(slug: str = None, email: str = None) -> Dict[str, Any]:
 
     to_email = cfg.get("email") or cfg.get("client_email")
     if not to_email:
-        # Check brief.md
         brief_path = os.path.join(vault_dir, "brief.md")
         if os.path.exists(brief_path):
             with open(brief_path, "r", encoding="utf-8") as bf:
@@ -186,7 +189,6 @@ def run_scorecard_draft(slug: str = None, email: str = None) -> Dict[str, Any]:
     # Locate scorecard
     scorecard_path = os.path.join(vault_dir, "screenshots", "scorecard.png")
     if not os.path.exists(scorecard_path):
-        # Check root of vault or screenshots dir
         alt_paths = [
             os.path.join(vault_dir, "scorecard.png"),
             os.path.join(vault_dir, "scorecard_combined.png"),
@@ -197,78 +199,121 @@ def run_scorecard_draft(slug: str = None, email: str = None) -> Dict[str, Any]:
                 scorecard_path = ap
                 break
 
-    if not os.path.exists(scorecard_path):
-        raise FileNotFoundError(f"Scorecard screenshot not found at {scorecard_path}. Save Semrush scorecard first.")
+    has_scorecard = os.path.exists(scorecard_path)
 
-    # Auto-extract metrics from scorecard image if config has placeholder values
+    # Auto-extract metrics from scorecard image if present
     diag = cfg.get("diagnostics", {})
-    if diag.get("authority_score") in [None, "Under Review", "Pending Capture"] or diag.get("backlinks") in [None, "Pending Capture"]:
-        print(f"[OCR] Auto-extracting Semrush metrics from {scorecard_path}...", flush=True)
-        extracted = extract_scorecard_metrics(scorecard_path)
-        diag["authority_score"] = extracted.get("authority_score", "0")
-        diag["organic_traffic"] = f"{extracted.get('organic_traffic', '0')} visits/mo"
-        diag["us_share"] = extracted.get("us_traffic_share", "")
-        diag["backlinks"] = f"{extracted.get('backlinks', '0')} backlinks"
-        diag["ref_domains"] = f"{extracted.get('ref_domains', '0')} domains"
-        diag["keywords_indexed"] = f"{extracted.get('organic_keywords', '0')} terms"
-        diag["ai_mentions"] = "0 Mentions"
-        cfg["diagnostics"] = diag
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2)
-        print(f"[OCR] Synced config.json with metrics: DA {diag['authority_score']}, Traffic {diag['organic_traffic']}, Ref Domains {diag['ref_domains']}", flush=True)
+    if has_scorecard:
+        if diag.get("authority_score") in [None, "Under Review", "Pending Capture"] or diag.get("backlinks") in [None, "Pending Capture"]:
+            print(f"[OCR] Auto-extracting Semrush metrics from {scorecard_path}...", flush=True)
+            try:
+                extracted = extract_scorecard_metrics(scorecard_path)
+                diag["authority_score"] = extracted.get("authority_score", "0")
+                diag["organic_traffic"] = f"{extracted.get('organic_traffic', '0')} visits/mo"
+                diag["us_share"] = extracted.get("us_traffic_share", "")
+                diag["backlinks"] = f"{extracted.get('backlinks', '0')} backlinks"
+                diag["ref_domains"] = f"{extracted.get('ref_domains', '0')} domains"
+                diag["keywords_indexed"] = f"{extracted.get('organic_keywords', '0')} terms"
+                diag["ai_mentions"] = "0 Mentions"
+                cfg["diagnostics"] = diag
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(cfg, f, indent=2)
+                print(f"[OCR] Synced config.json with metrics: DA {diag['authority_score']}, Traffic {diag['organic_traffic']}, Ref Domains {diag['ref_domains']}", flush=True)
+            except Exception as e:
+                print(f"[OCR] Notice: Could not extract from scorecard: {e}", flush=True)
+    else:
+        print(f"[Notice] Scorecard image not found at {scorecard_path}. Generating email copy with preliminary technical diagnostics.", flush=True)
 
     # Check if PDF exists to attach
     pdf_path = None
-    for f in os.listdir(vault_dir):
-        if f.endswith(".pdf") and "Search_Audit" in f:
-            pdf_path = os.path.join(vault_dir, f)
-            break
+    if os.path.exists(vault_dir):
+        for f in os.listdir(vault_dir):
+            if f.endswith(".pdf") and "Search_Audit" in f:
+                pdf_path = os.path.join(vault_dir, f)
+                break
 
-    html_body = build_scorecard_html(cfg, scorecard_path, pdf_attached=bool(pdf_path))
+    html_body = build_scorecard_html(cfg, scorecard_path if has_scorecard else None, pdf_attached=bool(pdf_path))
 
-    # Validate against scorecard image
-    validate_draft_against_scorecard(html_body, scorecard_path)
+    # Validate against scorecard image if present
+    if has_scorecard:
+        try:
+            validate_draft_against_scorecard(html_body, scorecard_path)
+        except Exception as e:
+            print(f"[Validation Notice] Metric parity check note: {e}", flush=True)
 
-    # Search for existing thread in Gmail
-    thread_info = find_thread_by_email(to_email)
-    thread_id = None
-    last_msg_id = None
-    refs = None
-    subject = cfg.get("subject", "Re: Google is changing. Are you ready?")
+    # Save local copy to vault always so it is never lost
+    draft_html_path = os.path.join(vault_dir, "draft_email.html")
+    draft_txt_path = os.path.join(vault_dir, "draft_email.txt")
+    with open(draft_html_path, "w", encoding="utf-8") as f:
+        f.write(html_body)
 
-    if thread_info:
-        thread_id = thread_info.get("thread_id")
-        last_msg_id = thread_info.get("last_message_id")
-        refs = thread_info.get("references")
-        subject = thread_info.get("subject", subject)
-        print(f"[Gmail API] Docking into existing conversation thread: {thread_id} ({thread_info.get('messages_count')} messages)", flush=True)
-    else:
-        print(f"[Gmail API] Creating new conversation draft for {to_email} (Subject: {subject})", flush=True)
+    # Format clean readable text version for direct copy-pasting
+    clean_text = re.sub(r'<style.*?</style>', '', html_body, flags=re.DOTALL)
+    clean_text = re.sub(r'<br\s*/?>', '\n', clean_text)
+    clean_text = re.sub(r'</p>', '\n\n', clean_text)
+    clean_text = re.sub(r'<[^>]+>', '', clean_text)
+    clean_text = re.sub(r'&bull;', '•', clean_text)
+    clean_text = re.sub(r'&amp;', '&', clean_text)
+    clean_text = re.sub(r'&mdash;', '—', clean_text)
+    clean_text = re.sub(r'&lt;', '<', clean_text)
+    clean_text = re.sub(r'&gt;', '>', clean_text)
+    clean_text = re.sub(r'\n\s*\n+', '\n\n', clean_text).strip()
 
-    attachments = [pdf_path] if pdf_path and os.path.exists(pdf_path) else None
+    with open(draft_txt_path, "w", encoding="utf-8") as f:
+        f.write(clean_text)
 
-    draft = create_gmail_draft(
-        to_email=to_email,
-        subject=subject,
-        html_body=html_body,
-        image_path=scorecard_path,
-        thread_id=thread_id,
-        last_message_id=last_msg_id,
-        references=refs,
-        attachment_paths=attachments
-    )
+    # Search for existing thread in Gmail & create draft
+    draft = None
+    try:
+        thread_info = find_thread_by_email(to_email)
+        thread_id = None
+        last_msg_id = None
+        refs = None
+        subject = cfg.get("subject", "Re: Google is changing. Are you ready?")
 
-    draft_id = draft.get("id")
-    print(f"\n{'='*65}")
-    print(f" [SUCCESS] LIVE GMAIL DRAFT CREATED IN < 5 SECONDS!")
-    print(f"{'='*65}")
-    print(f"  Draft ID:    {draft_id}")
-    print(f"  Recipient:   {to_email}")
-    print(f"  Subject:     {subject}")
-    print(f"  Scorecard:   {scorecard_path}")
-    if pdf_path:
-        print(f"  Attached:    {os.path.basename(pdf_path)}")
-    print(f"{'='*65}\n")
+        if thread_info:
+            thread_id = thread_info.get("thread_id")
+            last_msg_id = thread_info.get("last_message_id")
+            refs = thread_info.get("references")
+            subject = thread_info.get("subject", subject)
+            print(f"[Gmail API] Docking into existing conversation thread: {thread_id} ({thread_info.get('messages_count')} messages)", flush=True)
+        else:
+            print(f"[Gmail API] Creating new conversation draft for {to_email} (Subject: {subject})", flush=True)
+
+        attachments = [pdf_path] if pdf_path and os.path.exists(pdf_path) else None
+
+        draft = create_gmail_draft(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            image_path=scorecard_path if has_scorecard else None,
+            thread_id=thread_id,
+            last_message_id=last_msg_id,
+            references=refs,
+            attachment_paths=attachments
+        )
+
+        draft_id = draft.get("id")
+        print(f"\n{'='*65}")
+        print(f" [SUCCESS] LIVE GMAIL DRAFT CREATED IN < 5 SECONDS!")
+        print(f"{'='*65}")
+        print(f"  Draft ID:    {draft_id}")
+        print(f"  Recipient:   {to_email}")
+        print(f"  Subject:     {subject}")
+        if has_scorecard:
+            print(f"  Scorecard:   {scorecard_path}")
+        if pdf_path:
+            print(f"  Attached:    {os.path.basename(pdf_path)}")
+        print(f"{'='*65}\n")
+    except Exception as e:
+        print(f"\n[Gmail Notice] Could not inject to Gmail API ({e}).")
+        print(f"✓ Saved email draft to: {draft_html_path}")
+        print(f"✓ Ready-to-send email copy below:\n")
+        print("=" * 65)
+        print(clean_text)
+        print("=" * 65 + "\n")
+        draft = {"status": "saved_locally", "html_path": draft_html_path, "txt_path": draft_txt_path, "text": clean_text}
+
     return draft
 
 

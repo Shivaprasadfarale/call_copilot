@@ -40,12 +40,13 @@ def resolve_client_vault(slug_or_query: str) -> Optional[str]:
     
     # 2. Check slug normalized (lower, underscores, no special chars)
     slug_norm = re.sub(r'[^a-zA-Z0-9]', '', clean_query.lower())
-    for entry in os.listdir(CLIENTS_DIR):
-        entry_path = os.path.join(CLIENTS_DIR, entry)
-        if os.path.isdir(entry_path):
-            entry_norm = re.sub(r'[^a-zA-Z0-9]', '', entry.lower())
-            if slug_norm == entry_norm:
-                return entry_path
+    if os.path.exists(CLIENTS_DIR):
+        for entry in os.listdir(CLIENTS_DIR):
+            entry_path = os.path.join(CLIENTS_DIR, entry)
+            if os.path.isdir(entry_path):
+                entry_norm = re.sub(r'[^a-zA-Z0-9]', '', entry.lower())
+                if slug_norm == entry_norm:
+                    return entry_path
 
     # 3. Search index.json
     idx = load_index()
