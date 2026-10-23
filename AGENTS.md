@@ -186,10 +186,11 @@ Deliver a substantive technical audit answering the client's request to our outr
 
 ---
 
-## 4. Automated Delivery to Web Gmail Drafts
-* Automatically run `src/gmail_helper.py` using the authorized local token.
-* Injects the completed draft directly into the user's **web Gmail Drafts folder** with the inline image and yellow formatting in place.
-* Notify user with the Draft ID so they only have to open `mail.google.com` &rarr; Drafts &rarr; Click **Send**.
+## 4. Automated Delivery to Web Gmail Drafts & Direct Chat Output
+* Automatically run `src/gmail_helper.py` using the authorized local token if present.
+* **Dual-Delivery Standard (Live Draft or Instant Chat Output):**
+  * When Gmail API credentials (`credentials.json` or `token.json`) exist, the script automatically injects the completed draft directly into the user's **web Gmail Drafts folder** with the inline scorecard and attachments in place, notifying the user with the Draft ID so they can open `mail.google.com` &rarr; Drafts &rarr; Click **Send**.
+  * If Gmail API credentials are not yet configured on the local laptop, the system automatically saves the draft to the client's vault (`clients/{client_slug}/draft_email.html` and `.txt`) and prints the clean text. Anti Gravity MUST present this validated email copy directly in the chat window so the user can copy-paste it into their email client immediately. NEVER attempt to modify or hack scripts when credentials are not configured.
 
 ---
 
